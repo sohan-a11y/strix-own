@@ -5,6 +5,7 @@ import json
 import os
 import re
 import time
+import threading
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -19,6 +20,7 @@ from .security import validate_target_url
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 RUN_RE = re.compile(r"strix_runs/([A-Za-z0-9_.-]+)")
 JOBS: dict[str, "ScanJob"] = {}
+JOBS_LOCK = threading.RLock()
 
 
 def now() -> str:
@@ -104,7 +106,8 @@ def touch(job: ScanJob, status: str, message: str) -> None:
 
 def persist_public_jobs() -> None:
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
-    records = [job.public() for job in sorted(JOBS.values(), key=lambda item: item.created_at, reverse=True)]
+    with JOBS_LOCK:
+        records = [job.public() for job in sorted(JOBS.values(), key=lambda item: item.created_at, reverse=True)]
     safe_write(config.DATA_DIR / "jobs.json", json.dumps(records, indent=2))
 
 
@@ -182,6 +185,8 @@ async def start_job(job: ScanJob) -> None:
         job.secret_values.append(job.api_key)
     if job.existing_test_password:
         job.secret_values.append(job.existing_test_password)
+    if job.existing_test_email:
+        job.secret_values.append(job.existing_test_email)
     touch(job, "preflight", "Checking target scope and configuration")
     persist_public_jobs()
     try:
@@ -295,7 +300,9 @@ async def start_job(job: ScanJob) -> None:
         _scrub_artifacts(job)
         job.finished_at = now()
         await clear_api_secret(job)
-        job.secret_values = [s for s in job.secret_values if s != ""]
+        job.secret_values.clear()
+        job.existing_test_email = None
+        job.existing_test_password = None
         persist_public_jobs()
 
 
