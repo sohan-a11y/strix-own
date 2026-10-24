@@ -73,6 +73,7 @@ class ScanJob:
     account: TestAccount | None = None
     process: asyncio.subprocess.Process | None = None
     task: asyncio.Task[Any] | None = None
+    stop_requested: bool = False
     operator_continue: asyncio.Event = field(default_factory=asyncio.Event)
     secret_values: list[str] = field(default_factory=list)
 
@@ -336,6 +337,13 @@ async def start_job(job: ScanJob) -> None:  # noqa: PLR0912, PLR0915
 
 
 async def stop_job(job: ScanJob) -> None:
+    if job.status in {
+        "completed",
+        "completed_with_findings",
+        "failed",
+        "stopped",
+    }:
+        return
     if job.process and job.process.returncode is None:
         touch(job, "stopping", "Stop requested by operator")
         job.process.terminate()
@@ -350,6 +358,11 @@ async def stop_job(job: ScanJob) -> None:
             await job.task
         except asyncio.CancelledError:
             pass
+    else:
+        # The HTTP request can race the scheduled task's first event-loop tick.
+        # Mark the job before yielding so _run_job can skip it deterministically.
+        job.stop_requested = True
+        job.operator_continue.set()
     touch(job, "stopped", "Stopped by operator")
     await clear_api_secret(job)
     persist_public_jobs()
