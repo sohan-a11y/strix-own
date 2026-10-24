@@ -138,6 +138,7 @@ module = [
     "docker.*",
     "caido_sdk_client.*",
     "pydantic_settings.*",
+    "playwright.*",
     "reportlab.*",
     "pypdf.*",
     "yaml.*",
@@ -232,6 +233,9 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+"strix/oneclick/app.py" = ["N802", "ARG002", "PLR0912", "PLR0915"]
+"strix/oneclick/runner.py" = ["PLR0912", "PLR0915"]
+"strix/oneclick/cli.py" = ["T201"]
 # Test doubles use fixture tokens/passwords and match a callee signature whose
 # args they intentionally ignore.
 "tests/test_viewer_auth.py" = ["S105", "S106", "ARG001"]

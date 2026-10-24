@@ -53,7 +53,9 @@ def validate_target_url(raw: str, allow_private: bool = False) -> str:
         raise TargetValidationError("Target URL contains an invalid port.") from exc
     host = parsed.hostname.encode("idna").decode("ascii").lower().rstrip(".")
     if host in {"localhost", "localhost.localdomain"} and not allow_private:
-        raise TargetValidationError("Local/private targets require the explicit private-target checkbox.")
+        raise TargetValidationError(
+            "Local/private targets require the explicit private-target checkbox."
+        )
     addresses = _host_addresses(host)
     if not allow_private and any(not address.is_global for address in addresses):
         raise TargetValidationError(
@@ -73,7 +75,11 @@ def origin_of(raw: str) -> tuple[str, str, int | None]:
     parsed = urlsplit(raw)
     if not parsed.scheme or not parsed.hostname:
         raise TargetValidationError("A full URL is required.")
-    return (parsed.scheme.lower(), parsed.hostname.lower().rstrip("."), parsed.port)
+    scheme = parsed.scheme.lower()
+    port = parsed.port
+    if port is None:
+        port = 443 if scheme == "https" else 80 if scheme == "http" else None
+    return (scheme, parsed.hostname.lower().rstrip("."), port)
 
 
 def require_same_origin(target: str, candidate: str) -> str:

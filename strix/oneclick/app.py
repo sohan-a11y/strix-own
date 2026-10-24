@@ -6,6 +6,7 @@ import ipaddress
 import json
 import secrets
 import shutil
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -49,8 +50,18 @@ def _require_local(handler: BaseHTTPRequestHandler) -> bool:
         if client not in {"testclient", "localhost"}:
             return False
     origin = handler.headers.get("Origin")
-    if origin and (urlsplit(origin).hostname or "").lower() not in {"127.0.0.1", "localhost", "::1"}:
-        return False
+    if origin:
+        parsed_origin = urlsplit(origin)
+        origin_host = (parsed_origin.hostname or "").lower()
+        if origin_host not in _LOCAL_HOSTS or parsed_origin.scheme.lower() != "http":
+            return False
+        try:
+            origin_port = parsed_origin.port or 80
+            request_port = urlsplit("//" + host_header).port or 80
+        except ValueError:
+            return False
+        if origin_host != host or origin_port != request_port:
+            return False
     return True
 
 
@@ -68,14 +79,27 @@ class OneClickHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Cache-Control", "no-store")
-        self.send_header("Content-Security-Policy", "default-src 'self'; connect-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:")
+        self.send_header(
+            "Content-Security-Policy",
+            "default-src 'self'; connect-src 'self'; style-src 'self'; "
+            "script-src 'self'; img-src 'self' data:",
+        )
         self.end_headers()
         self.wfile.write(body)
 
     def _json(self, status: int, data: Any) -> None:
-        self._send(status, json.dumps(data, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+        self._send(
+            status,
+            json.dumps(data, ensure_ascii=False).encode("utf-8"),
+            "application/json; charset=utf-8",
+        )
 
-    def _text(self, status: int, data: str, content_type: str = "text/plain; charset=utf-8") -> None:
+    def _text(
+        self,
+        status: int,
+        data: str,
+        content_type: str = "text/plain; charset=utf-8",
+    ) -> None:
         self._send(status, data.encode("utf-8", errors="replace"), content_type)
 
     def _read_json(self) -> dict[str, Any]:
@@ -97,7 +121,10 @@ class OneClickHandler(BaseHTTPRequestHandler):
     def _api_guard(self) -> bool:
         if _require_local(self):
             return True
-        self._json(403, {"detail": "This API is local-only. Use the controller at 127.0.0.1 or localhost."})
+        self._json(
+            403,
+            {"detail": "This API is local-only. Use the controller at 127.0.0.1 or localhost."},
+        )
         return False
 
     def do_GET(self) -> None:  # noqa: N802
@@ -108,7 +135,11 @@ class OneClickHandler(BaseHTTPRequestHandler):
             return
         if path in {"/static/app.js", "/static/style.css"}:
             asset = path.rsplit("/", 1)[-1]
-            content_type = "application/javascript; charset=utf-8" if asset.endswith(".js") else "text/css; charset=utf-8"
+            content_type = (
+                "application/javascript; charset=utf-8"
+                if asset.endswith(".js")
+                else "text/css; charset=utf-8"
+            )
             self._serve_static(asset, content_type)
             return
         if path.startswith("/api/") and not self._api_guard():
@@ -127,7 +158,12 @@ class OneClickHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/scans":
             with JOBS_LOCK:
-                scans = [job.public() for job in sorted(JOBS.values(), key=lambda item: item.created_at, reverse=True)]
+                scans = [
+                    job.public()
+                    for job in sorted(
+                        JOBS.values(), key=lambda item: item.created_at, reverse=True
+                    )
+                ]
             self._json(200, scans)
             return
 
@@ -143,18 +179,27 @@ class OneClickHandler(BaseHTTPRequestHandler):
                 self._json(200, job.public())
                 return
             if len(route) == 4 and route[3] == "log":
-                log = job.log_path.read_text(encoding="utf-8", errors="replace")[-50000:] if job.log_path and job.log_path.is_file() else "\n".join(job.output_tail)
+                if job.log_path and job.log_path.is_file():
+                    log = job.log_path.read_text(encoding="utf-8", errors="replace")[-50000:]
+                else:
+                    log = "\n".join(job.output_tail)
                 self._text(200, log)
                 return
             if len(route) == 4 and route[3] == "report":
                 if not job.run_name or Path(job.run_name).name != job.run_name:
                     self._json(404, {"detail": "The final Strix report is not available yet."})
                     return
-                report = config.WORK_DIR / "strix_runs" / job.run_name / "penetration_test_report.md"
+                report = (
+                    config.WORK_DIR / "strix_runs" / job.run_name / "penetration_test_report.md"
+                )
                 if not report.is_file():
                     self._json(404, {"detail": "The Markdown report has not been generated yet."})
                     return
-                self._text(200, report.read_text(encoding="utf-8", errors="replace"), "text/markdown; charset=utf-8")
+                self._text(
+                    200,
+                    report.read_text(encoding="utf-8", errors="replace"),
+                    "text/markdown; charset=utf-8",
+                )
                 return
             if len(route) == 4 and route[3] == "credentials":
                 if not job.account:
@@ -181,11 +226,26 @@ class OneClickHandler(BaseHTTPRequestHandler):
                 try:
                     payload = ScanRequest.model_validate(payload_dict)
                 except ValidationError as exc:
-                    errors = [{"loc": e.get("loc"), "msg": e.get("msg"), "type": e.get("type")} for e in exc.errors(include_input=False)]
+                    errors = [
+                        {
+                            "loc": error.get("loc"),
+                            "msg": error.get("msg"),
+                            "type": error.get("type"),
+                        }
+                        for error in exc.errors(include_input=False)
+                    ]
                     self._json(400, {"detail": errors})
                     return
                 if not payload.authorized:
-                    self._json(400, {"detail": "Confirm that you own this target or have explicit written authorization to test it."})
+                    self._json(
+                        400,
+                        {
+                            "detail": (
+                                "Confirm that you own this target or have explicit written "
+                                "authorization to test it."
+                            )
+                        },
+                    )
                     return
                 allow_private = payload.allow_private_target or config.ALLOW_PRIVATE_TARGETS
                 try:
@@ -195,13 +255,40 @@ class OneClickHandler(BaseHTTPRequestHandler):
                     return
                 if payload.create_test_account:
                     if not payload.account_recipe:
-                        self._json(400, {"detail": "Add a signup-form recipe or disable automatic account creation."})
+                        self._json(
+                            400,
+                            {
+                                "detail": (
+                                    "Add a signup-form recipe or disable automatic "
+                                    "account creation."
+                                )
+                            },
+                        )
                         return
-                    if not payload.controlled_email_domain_confirmed or not payload.controlled_email_domain:
-                        self._json(400, {"detail": "Confirm that the test-email domain and receiving inbox are under your control."})
+                    if (
+                        not payload.controlled_email_domain_confirmed
+                        or not payload.controlled_email_domain
+                    ):
+                        self._json(
+                            400,
+                            {
+                                "detail": (
+                                    "Confirm that the test-email domain and receiving inbox are "
+                                    "under your control."
+                                )
+                            },
+                        )
                         return
                 if bool(payload.existing_test_email) != bool(payload.existing_test_password):
-                    self._json(400, {"detail": "Provide both existing test email and password, or leave both empty."})
+                    self._json(
+                        400,
+                        {
+                            "detail": (
+                                "Provide both existing test email and password, or "
+                                "leave both empty."
+                            )
+                        },
+                    )
                     return
                 job_id = secrets.token_hex(6)
                 job = ScanJob(
@@ -212,13 +299,20 @@ class OneClickHandler(BaseHTTPRequestHandler):
                     api_base=payload.api_base,
                     scan_mode=payload.scan_mode,
                     max_budget_usd=payload.max_budget_usd,
-                    max_runtime_minutes=min(payload.max_runtime_minutes, max(5, config.MAX_RUNTIME_SECONDS // 60)),
+                    max_runtime_minutes=min(
+                        payload.max_runtime_minutes,
+                        max(5, config.MAX_RUNTIME_SECONDS // 60),
+                    ),
                     allow_private_target=allow_private,
                     create_test_account=payload.create_test_account,
                     controlled_email_domain=payload.controlled_email_domain,
                     account_recipe=payload.account_recipe,
                     existing_test_email=payload.existing_test_email,
-                    existing_test_password=payload.existing_test_password.get_secret_value() if payload.existing_test_password else None,
+                    existing_test_password=(
+                        payload.existing_test_password.get_secret_value()
+                        if payload.existing_test_password
+                        else None
+                    ),
                 )
                 with JOBS_LOCK:
                     JOBS[job_id] = job
@@ -238,7 +332,10 @@ class OneClickHandler(BaseHTTPRequestHandler):
                     return
                 if route[3] == "continue":
                     if job.status != "needs_user_action":
-                        self._json(409, {"detail": "This scan is not waiting for manual signup verification."})
+                        self._json(
+                            409,
+                            {"detail": "This scan is not waiting for manual signup verification."},
+                        )
                         return
                     LOOP.call_soon_threadsafe(job.operator_continue.set)
                     self._json(202, job.public())
@@ -247,18 +344,23 @@ class OneClickHandler(BaseHTTPRequestHandler):
                     future = asyncio.run_coroutine_threadsafe(stop_job(job), LOOP)
                     try:
                         future.result(timeout=15)
-                    except Exception as exc:
-                        self._json(500, {"detail": "Could not stop the scan cleanly: " + type(exc).__name__})
+                    except Exception as exc:  # noqa: BLE001
+                        self._json(
+                            500,
+                            {"detail": "Could not stop the scan cleanly: " + type(exc).__name__},
+                        )
                         return
                     self._json(200, job.public())
                     return
             self._json(404, {"detail": "Route not found."})
         except ValueError as exc:
             self._json(400, {"detail": str(exc)})
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self._json(500, {"detail": "Controller error: " + type(exc).__name__})
 
-    def send_error(self, code: int, message: str | None = None, explain: str | None = None) -> None:
+    def send_error(
+        self, code: int, message: str | None = None, explain: str | None = None
+    ) -> None:  # noqa: N802, ARG002
         self._json(code, {"detail": message or "Request failed."})
 
 
@@ -270,17 +372,20 @@ class LocalServer(ThreadingHTTPServer):
 def serve(port: int = 8765) -> None:
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
     if not LOOP.is_running():
-        thread = threading.Thread(target=_run_event_loop, name="strix-oneclick-event-loop", daemon=True)
+        thread = threading.Thread(
+            target=_run_event_loop, name="strix-oneclick-event-loop", daemon=True
+        )
         thread.start()
         if not LOOP_READY.wait(timeout=5):
             raise RuntimeError("The background scan event loop did not start.")
     server = LocalServer(("127.0.0.1", port), OneClickHandler)
-    print("Strix One-Click dashboard: http://127.0.0.1:" + str(port))
-    print("Local-only controller. Do not expose this port to a network.")
+    sys.stdout.write("Strix One-Click dashboard: http://127.0.0.1:" + str(port) + "\n")
+    sys.stdout.write("Local-only controller. Do not expose this port to a network.\n")
+    sys.stdout.flush()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\nStopping Strix One-Click controller…")
+        sys.stdout.write("\nStopping Strix One-Click controller…\n")
     finally:
         server.shutdown()
         server.server_close()
@@ -288,6 +393,6 @@ def serve(port: int = 8765) -> None:
             future = asyncio.run_coroutine_threadsafe(stop_job(job), LOOP)
             try:
                 future.result(timeout=10)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 pass
         LOOP.call_soon_threadsafe(LOOP.stop)

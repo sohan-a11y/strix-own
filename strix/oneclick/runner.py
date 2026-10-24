@@ -4,8 +4,8 @@ import asyncio
 import json
 import os
 import re
-import time
 import threading
+import time
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -107,7 +107,14 @@ def touch(job: ScanJob, status: str, message: str) -> None:
 def persist_public_jobs() -> None:
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
     with JOBS_LOCK:
-        records = [job.public() for job in sorted(JOBS.values(), key=lambda item: item.created_at, reverse=True)]
+        records = [
+            job.public()
+            for job in sorted(
+                JOBS.values(),
+                key=lambda item: item.created_at,
+                reverse=True,
+            )
+        ]
     safe_write(config.DATA_DIR / "jobs.json", json.dumps(records, indent=2))
 
 
@@ -120,7 +127,8 @@ def _scan_instruction(job: ScanJob) -> str:
         "Perform a thorough, evidence-driven web application security assessment.",
         "Stay within the supplied target origin and the owner's authorized scope.",
         "Use safe, non-destructive validation. Do not perform denial-of-service, persistence,",
-        "mass account creation, destructive actions, or tests against unrelated third-party systems.",
+        "mass account creation, destructive actions, or tests against unrelated third-party "
+        "systems.",
         "Validate findings with reproducible evidence and counterevidence; distinguish confirmed",
         "issues from hypotheses and describe coverage limitations.",
     ]
@@ -131,7 +139,8 @@ def _scan_instruction(job: ScanJob) -> str:
             "Test email: " + job.account.email,
             "Test password: " + job.account.password,
             "Use it only for authenticated checks on the supplied target.",
-            "Do not create additional accounts. Do not attempt to evade CAPTCHA, MFA, or email verification.",
+            "Do not create additional accounts. Do not attempt to evade CAPTCHA, MFA, or email "
+            "verification.",
         ])
     elif job.existing_test_email and job.existing_test_password:
         lines.extend([
@@ -175,7 +184,7 @@ async def _pause_for_operator(job: ScanJob, message: str) -> None:
     job.operator_continue.clear()
 
 
-async def start_job(job: ScanJob) -> None:
+async def start_job(job: ScanJob) -> None:  # noqa: PLR0912, PLR0915
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
     job_dir = config.DATA_DIR / job.id
     job_dir.mkdir(parents=True, exist_ok=True)
@@ -193,7 +202,9 @@ async def start_job(job: ScanJob) -> None:
         job.target_url = validate_target_url(job.target_url, allow_private=job.allow_private_target)
         if job.create_test_account:
             if job.account_recipe is None or not job.controlled_email_domain:
-                raise ValueError("A signup recipe and a test-email domain you control are required.")
+                raise ValueError(
+                    "A signup recipe and a test-email domain you control are required."
+                )
             touch(job, "provisioning", "Opening the target's signup form in a visible browser")
             job.account = await provision_test_account(
                 job.target_url, job.account_recipe, job.controlled_email_domain,
@@ -207,7 +218,11 @@ async def start_job(job: ScanJob) -> None:
         if job.api_base:
             env["LLM_API_BASE"] = job.api_base
         started_dir = config.WORK_DIR / "strix_runs"
-        before = {p.name for p in started_dir.iterdir() if p.is_dir()} if started_dir.is_dir() else set()
+        before = (
+            {path.name for path in started_dir.iterdir() if path.is_dir()}
+            if started_dir.is_dir()
+            else set()
+        )
         command = [
             config.STRIX_COMMAND, "-n", "--target", job.target_url,
             "--instruction-file", str(job.instruction_path),
@@ -220,7 +235,7 @@ async def start_job(job: ScanJob) -> None:
             job.started_at = now()
             touch(job, "running", "Strix is running; live output is shown below")
             try:
-                job.process = await asyncio.create_subprocess_exec(
+                job.process = await asyncio.create_subprocess_exec(  # noqa: S603, S607
                     *command,
                     cwd=str(config.WORK_DIR),
                     env=env,
@@ -229,7 +244,8 @@ async def start_job(job: ScanJob) -> None:
                 )
             except FileNotFoundError as exc:
                 raise RuntimeError(
-                    f"Could not find Strix executable {config.STRIX_COMMAND!r}. Install Strix or set STRIX_EXECUTABLE."
+                    f"Could not find Strix executable {config.STRIX_COMMAND!r}. "
+                    "Install Strix or set STRIX_EXECUTABLE."
                 ) from exc
             started = time.monotonic()
             instruction_removed = False
@@ -274,11 +290,24 @@ async def start_job(job: ScanJob) -> None:
         if job.status in {"stopping", "stopped"}:
             touch(job, "stopped", "Scan stopped at the runtime limit or by the operator")
         elif job.return_code == 0:
-            touch(job, "completed", "Strix completed. Review analyzed coverage and the final report.")
+            touch(
+                job,
+                "completed",
+                "Strix completed. Review analyzed coverage and the final report.",
+            )
         elif job.return_code == 2:
-            touch(job, "completed_with_findings", "Strix reported one or more vulnerabilities; review evidence and severity.")
+            touch(
+                job,
+                "completed_with_findings",
+                "Strix reported one or more vulnerabilities; review evidence and severity.",
+            )
         else:
-            touch(job, "failed", f"Strix exited with code {job.return_code}. Review the controller log and run status.")
+            touch(
+                job,
+                "failed",
+                f"Strix exited with code {job.return_code}. Review the controller "
+                "log and run status.",
+            )
     except asyncio.CancelledError:
         if job.process and job.process.returncode is None:
             job.process.terminate()
@@ -288,7 +317,7 @@ async def start_job(job: ScanJob) -> None:
                 job.process.kill()
         touch(job, "stopped", "Scan was stopped before completion")
         raise
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         touch(job, "failed", redact(str(exc), job.secret_values))
         job.output_tail.append("ERROR: " + redact(str(exc), job.secret_values))
         if job.log_path:

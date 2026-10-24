@@ -8,7 +8,8 @@ from strix.oneclick.security import TargetValidationError, require_same_origin, 
 def test_private_target_requires_explicit_opt_in() -> None:
     with pytest.raises(TargetValidationError, match="private"):
         validate_target_url("http://127.0.0.1:8080")
-    assert validate_target_url("http://127.0.0.1:8080", allow_private=True) == "http://127.0.0.1:8080/"
+    target = validate_target_url("http://127.0.0.1:8080", allow_private=True)
+    assert target == "http://127.0.0.1:8080/"
 
 
 def test_target_credentials_are_rejected() -> None:
@@ -29,3 +30,10 @@ def test_signup_must_use_same_origin() -> None:
 def test_same_origin_signup_normalizes_path() -> None:
     actual = require_same_origin("http://127.0.0.1:8080", "http://127.0.0.1:8080/register")
     assert actual == "http://127.0.0.1:8080/register"
+
+
+def test_same_origin_normalizes_default_https_port() -> None:
+    actual = require_same_origin(
+        "https://127.0.0.1", "https://127.0.0.1:443/register"
+    )
+    assert actual == "https://127.0.0.1:443/register"
