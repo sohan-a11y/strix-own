@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Strix One-Click · Security Assessment</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script defer src="/static/app.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Strix One-Click home">
+        <span class="brand-mark">S</span>
+        <span><strong>STRIX</strong><small>ONE-CLICK ASSESSMENT</small></span>
+      </a>
+      <div class="local-badge"><span class="dot"></span> LOCAL CONTROLLER</div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="eyebrow"><span class="eyebrow-line"></span> AI-ASSISTED APPLICATION SECURITY</div>
+        <h1>Test your application.<br><span>See every step.</span></h1>
+        <p>Configure your authorized target and model once, then launch a visible Strix assessment with evidence and a report.</p>
+      </section>
+
+      <div class="layout">
+        <section class="panel configure-panel">
+          <div class="panel-heading">
+            <div><span class="step">01</span><h2>Assessment setup</h2></div>
+            <span class="subtle">Required fields marked *</span>
+          </div>
+          <form id="scan-form">
+            <label for="target-url">Web application URL <span>*</span></label>
+            <input id="target-url" name="target_url" type="url" placeholder="https://staging.example.com" autocomplete="url" required>
+            <p class="hint">Use a staging environment when possible. Only scan targets you own or are explicitly authorized to test.</p>
+
+            <div class="two-col">
+              <div>
+                <label for="model">LLM provider/model <span>*</span></label>
+                <input id="model" name="model" placeholder="openai/your-supported-model" required>
+              </div>
+              <div>
+                <label for="scan-mode">Scan depth</label>
+                <select id="scan-mode" name="scan_mode">
+                  <option value="quick">Quick · faster coverage</option>
+                  <option value="standard">Standard · balanced</option>
+                  <option value="deep" selected>Deep · thorough assessment</option>
+                </select>
+              </div>
+            </div>
+
+            <label for="api-key">LLM API key <span>*</span></label>
+            <input id="api-key" name="api_key" type="password" autocomplete="off" placeholder="Paste API key · kept in memory for this run" required minlength="8">
+            <p class="hint">The key is not included in job metadata or command-line arguments. Strix receives it through its process environment. The chosen model provider will process the assessment context.</p>
+            <label for="api-base">Custom API base <span class="optional">OPTIONAL</span></label>
+            <input id="api-base" name="api_base" type="url" placeholder="https://provider.example/v1">
+            <div class="two-col">
+              <div>
+                <label for="budget">LLM spend cap (USD)</label>
+                <input id="budget" name="max_budget_usd" type="number" min="0.1" max="500" step="0.5" value="10" required>
+              </div>
+              <div>
+                <label for="runtime">Runtime cap (minutes)</label>
+                <input id="runtime" name="max_runtime_minutes" type="number" min="5" max="360" step="5" value="120" required>
+              </div>
+            </div>
+
+            <details class="advanced">
+              <summary>Target and account options</summary>
+              <label class="check-row"><input id="allow-private" type="checkbox"><span><strong>Allow private / localhost target</strong><small>Only use for a staging app or test service you control.</small></span></label>
+              <label class="check-row"><input id="create-account" type="checkbox"><span><strong>Create a test account automatically</strong><small>Opens a visible browser. CAPTCHA and verification are handled by you, not bypassed.</small></span></label>
+              <div id="account-fields" class="account-fields hidden">
+                <label for="email-domain">Test email domain you control <span>*</span></label>
+                <input id="email-domain" placeholder="qa.example.com">
+                <label class="check-row confirm"><input id="domain-confirmed" type="checkbox"><span>I control this domain and can receive its verification email.</span></label>
+                <label for="signup-url">Signup page URL <span>*</span></label>
+                <input id="signup-url" type="url" placeholder="https://staging.example.com/register">
+                <div class="two-col">
+                  <div><label for="email-selector">Email field CSS selector</label><input id="email-selector" placeholder="input[type=email]"></div>
+                  <div><label for="password-selector">Password field CSS selector</label><input id="password-selector" placeholder="input[type=password]"></div>
+                </div>
+                <div class="two-col">
+                  <div><label for="confirm-selector">Confirm password selector <span class="optional">OPTIONAL</span></label><input id="confirm-selector" placeholder="#confirmPassword"></div>
+                  <div><label for="name-selector">Name field selector <span class="optional">OPTIONAL</span></label><input id="name-selector" placeholder="input[name=name]"></div>
+                </div>
+                <label for="submit-selector">Signup button CSS selector</label><input id="submit-selector" placeholder="button[type=submit]">
+                <p class="hint">The signup URL must share the target's exact origin (scheme, host and port). Account automation is site-specific and pauses when success is unclear.</p>
+              </div>
+              <div class="divider"></div>
+              <label for="existing-email">Existing test account email <span class="optional">OPTIONAL</span></label>
+              <input id="existing-email" type="email" autocomplete="off" placeholder="qa-user@your-test-domain">
+              <label for="existing-password">Existing test account password <span class="optional">OPTIONAL</span></label>
+              <input id="existing-password" type="password" autocomplete="off" placeholder="Use credentials only for this target">
+            </details>
+
+            <label class="check-row authorization">
+              <input id="authorized" type="checkbox" required>
+              <span><strong>I own this application or have explicit written permission to test it.</strong><small>I understand this performs active security testing and may generate requests against the target.</small></span>
+            </label>
+            <button class="primary-button" id="start-button" type="submit"><span class="play">▶</span> Start security assessment <span class="button-arrow">↗</span></button>
+            <p id="form-error" class="error" role="alert"></p>
+          </form>
+        </section>
+
+        <section class="panel activity-panel">
+          <div class="panel-heading">
+            <div><span class="step">02</span><h2>Live execution</h2></div>
+            <span id="health-badge" class="status-pill neutral">Checking setup…</span>
+          </div>
+          <div id="health-card" class="health-card">Checking Strix availability and optional browser support…</div>
+          <div class="run-heading"><h3>Assessment runs</h3><button class="text-button" id="refresh-button" type="button">Refresh ↻</button></div>
+          <div id="runs" class="runs empty-state">Your scans will appear here after launch.</div>
+          <div class="log-header"><div><span class="terminal-dot"></span><strong>Execution output</strong></div><span id="selected-label">No run selected</span></div>
+          <pre id="log-output" class="log-output">Waiting for an assessment…</pre>
+          <div id="run-actions" class="run-actions hidden"></div>
+          <div class="report-note"><span class="note-mark">i</span><span>A completed scan is not a guarantee of security. Review findings, evidence, coverage, runtime and budget before drawing conclusions.</span></div>
+        </section>
+      </div>
+    </main>
+    <footer><span>STRIX ONE-CLICK</span><span>Runs locally · Controller binds only to loopback</span></footer>
+  </div>
+</body>
+</html>

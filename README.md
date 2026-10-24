@@ -71,6 +71,32 @@ Strix are autonomous AI penetration testing agents that act just like real hacke
 - **Bug Bounty Automation** - Automate bug bounty research and generate PoCs for faster reporting
 - **CI/CD Integration** - Run tests in CI/CD to block vulnerabilities before reaching production
 
+## One-Click Local Assessment Dashboard
+
+The local dashboard provides a single browser form for the target URL, LLM provider/model, API key, scan depth, spend budget, and runtime cap. It launches the existing Strix CLI, shows live output, and links to the normal Strix report. It is an orchestration UI around Strix, not a replacement for the agent engine.
+
+### Run it
+
+~~~bash
+uv sync
+uv run strix-oneclick
+~~~
+
+Open http://127.0.0.1:8765 in your browser. Docker must be running and the selected LLM model/key must be supported by this Strix version. The dashboard binds to loopback only; do not expose it directly to a network.
+
+### Optional signup automation
+
+Install the browser extra and its Chromium runtime:
+
+~~~bash
+uv sync --extra oneclick-browser
+uv run python -m playwright install chromium
+~~~
+
+In the dashboard, enable test-account creation and provide a site-specific CSS-selector recipe, plus an email domain/inbox you control. The signup URL must share the target origin. The generated account is intended for the target application only. Registration can fail or require site-specific handling; CAPTCHA, MFA, bot challenges, and verification are not bypassed. When signup success is unclear, the visible browser stays open and the workflow pauses for operator confirmation.
+
+**Safety and reliability notes:** only scan targets you own or have explicit written authorization to assess. Private/localhost targets require explicit opt-in. URL validation is a preflight guard, not a network egress firewall; enforce a network allowlist separately if you require a hard boundary. LLM API keys are passed to the Strix child process via environment, not command-line arguments. The generated test credentials are supplied to the configured model provider for authenticated testing; use a provider policy suitable for that data. Artifact scrubbing is best-effort, so review the run directory before sharing it. A completed scan is not proof that every vulnerability was found.
+
 ## 🚀 Quick Start
 
 **Prerequisites:**

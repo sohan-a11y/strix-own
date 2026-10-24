@@ -1,0 +1,34 @@
+# One-Click Local Dashboard
+
+## Purpose
+
+The dashboard wraps the existing Strix CLI in a local-only browser UI. It does not replace or fork Strix's agent runtime, prompts, tools, or report generation. It starts a normal Strix scan with a bounded budget and runtime, then displays the CLI output and report.
+
+## Start
+
+From the Strix checkout:
+
+~~~bash
+uv sync
+uv run strix-oneclick
+~~~
+
+Browse to http://127.0.0.1:8765. To provision a test account automatically, install the optional browser feature:
+
+~~~bash
+uv sync --extra oneclick-browser
+uv run python -m playwright install chromium
+~~~
+
+Configure an exact signup-page URL and CSS selectors that match your staging app. Choose only a test-email domain and receiving inbox under your control. Browser-based registration may require manual verification; the workflow does not bypass CAPTCHA, MFA, rate controls, or other anti-abuse steps.
+
+## Controls and limitations
+
+- Explicit authorization checkbox is required before scans start.
+- Public URLs are checked for private/loopback resolution; private destinations require explicit opt-in.
+- The web server binds only to 127.0.0.1.
+- API keys are not passed on the child-process command line or written to public job metadata.
+- Credentials are passed to the configured LLM provider when authenticated testing is requested. Use only credentials intended for security testing.
+- Controller artifact scrubbing is best-effort. Review any run artifacts before sharing.
+- URL preflight does not enforce redirects or tool-level network egress. For a hard scope boundary, use a staging target and a separate network egress allowlist/firewall.
+- A zero-exit scan only means Strix completed within the analyzed coverage, not that the application has no vulnerabilities.

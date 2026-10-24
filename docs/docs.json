@@ -24,6 +24,7 @@
             "group": "Usage",
             "pages": [
               "usage/cli",
+              "one-click",
               "usage/scan-modes",
               "usage/instructions",
               "usage/viewer"
