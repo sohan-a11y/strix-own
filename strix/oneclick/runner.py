@@ -351,6 +351,18 @@ async def stop_job(job: ScanJob) -> None:
             await asyncio.wait_for(job.process.wait(), timeout=8)
         except asyncio.TimeoutError:
             job.process.kill()
+            await job.process.wait()
+        # Let the scan task read EOF and finalize its report/status. Otherwise the
+        # controller may overwrite "stopped" with an exit-code failure.
+        if job.task and not job.task.done():
+            try:
+                await asyncio.wait_for(asyncio.shield(job.task), timeout=12)
+            except asyncio.TimeoutError:
+                job.task.cancel()
+                try:
+                    await job.task
+                except asyncio.CancelledError:
+                    pass
     elif job.task and not job.task.done():
         job.operator_continue.set()
         job.task.cancel()
@@ -363,6 +375,12 @@ async def stop_job(job: ScanJob) -> None:
         # Mark the job before yielding so _run_job can skip it deterministically.
         job.stop_requested = True
         job.operator_continue.set()
-    touch(job, "stopped", "Stopped by operator")
+    if job.status not in {
+        "completed",
+        "completed_with_findings",
+        "failed",
+        "stopped",
+    }:
+        touch(job, "stopped", "Stopped by operator")
     await clear_api_secret(job)
     persist_public_jobs()

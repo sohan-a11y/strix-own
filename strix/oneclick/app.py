@@ -17,16 +17,7 @@ from pydantic import ValidationError
 
 from . import config
 from .models import ScanRequest
-from .runner import (
-    JOBS,
-    JOBS_LOCK,
-    ScanJob,
-    clear_api_secret,
-    persist_public_jobs,
-    start_job,
-    stop_job,
-    touch,
-)
+from .runner import JOBS, JOBS_LOCK, ScanJob, persist_public_jobs, start_job, stop_job, touch
 from .security import TargetValidationError, validate_target_url
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -36,11 +27,6 @@ _LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1", "testserver"}
 
 
 async def _run_job(job: ScanJob) -> None:
-    if job.stop_requested:
-        touch(job, "stopped", "Stopped before the scan process was started")
-        await clear_api_secret(job)
-        persist_public_jobs()
-        return
     job.task = asyncio.current_task()
     await start_job(job)
 
