@@ -159,11 +159,16 @@ form.addEventListener("submit", async (event) => {
       confirm_password_selector: byId("confirm-selector").value.trim() || null,
       name_selector: byId("name-selector").value.trim() || null
     };
+    payload.imap_host = byId("imap-host").value.trim() || null;
+    payload.imap_port = Number(byId("imap-port").value || 993);
+    payload.imap_username = byId("imap-user").value.trim() || null;
+    payload.imap_password = byId("imap-password").value || null;
   }
   try {
     const scan = await api("/api/scans", {method: "POST", body: JSON.stringify(payload)});
     byId("api-key").value = "";
     byId("existing-password").value = "";
+    byId("imap-password").value = "";
     selectedId = scan.id;
     await poll();
   } catch (error) {

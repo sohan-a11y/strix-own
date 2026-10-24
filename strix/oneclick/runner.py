@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from . import config
-from .accounts import TestAccount, provision_test_account
+from .accounts import IMAPInbox, TestAccount, provision_test_account
 from .models import SignupRecipe
 from .security import validate_target_url
 
@@ -59,6 +59,10 @@ class ScanJob:
     account_recipe: SignupRecipe | None
     existing_test_email: str | None = None
     existing_test_password: str | None = None
+    imap_host: str | None = None
+    imap_port: int = 993
+    imap_username: str | None = None
+    imap_password: str | None = None
     status: str = "queued"
     message: str = "Queued"
     created_at: str = field(default_factory=now)
@@ -121,6 +125,7 @@ def persist_public_jobs() -> None:
 
 async def clear_api_secret(job: ScanJob) -> None:
     job.api_key = ""
+    job.imap_password = None
 
 
 def _scan_instruction(job: ScanJob) -> str:
@@ -195,6 +200,8 @@ async def start_job(job: ScanJob) -> None:  # noqa: PLR0912, PLR0915
         job.secret_values.append(job.api_key)
     if job.existing_test_password:
         job.secret_values.append(job.existing_test_password)
+    if job.imap_password:
+        job.secret_values.append(job.imap_password)
     if job.existing_test_email:
         job.secret_values.append(job.existing_test_email)
     touch(job, "preflight", "Checking target scope and configuration")
@@ -207,9 +214,20 @@ async def start_job(job: ScanJob) -> None:  # noqa: PLR0912, PLR0915
                     "A signup recipe and a test-email domain you control are required."
                 )
             touch(job, "provisioning", "Opening the target's signup form in a visible browser")
+            imap_inbox = None
+            if job.imap_host and job.imap_username and job.imap_password:
+                imap_inbox = IMAPInbox(
+                    host=job.imap_host,
+                    port=job.imap_port,
+                    username=job.imap_username,
+                    password=job.imap_password,
+                )
             job.account = await provision_test_account(
-                job.target_url, job.account_recipe, job.controlled_email_domain,
+                job.target_url,
+                job.account_recipe,
+                job.controlled_email_domain,
                 lambda text: _pause_for_operator(job, text),
+                imap_inbox=imap_inbox,
             )
             job.secret_values.extend([job.account.email, job.account.password])
         safe_write(job.instruction_path, _scan_instruction(job))
@@ -333,6 +351,7 @@ async def start_job(job: ScanJob) -> None:  # noqa: PLR0912, PLR0915
         job.secret_values.clear()
         job.existing_test_email = None
         job.existing_test_password = None
+        job.imap_password = None
         persist_public_jobs()
 
 

@@ -86,7 +86,19 @@
                   <div><label for="name-selector">Name field selector <span class="optional">OPTIONAL</span></label><input id="name-selector" placeholder="input[name=name]"></div>
                 </div>
                 <label for="submit-selector">Signup button CSS selector</label><input id="submit-selector" placeholder="button[type=submit]">
-                <p class="hint">The signup URL must share the target's exact origin (scheme, host and port). Account automation is site-specific and pauses when success is unclear.</p>
+                <div class="divider"></div>
+                <p class="field-section-title">Optional automatic email verification</p>
+                <p class="hint">Use an IMAPS inbox and address domain you control. If the site sends a verification link to the generated address, the controller looks for a link addressed to that account and follows it only when it points to the same target origin. IMAP credentials are never sent to the LLM.</p>
+                <label for="imap-host">IMAP host <span class="optional">OPTIONAL</span></label>
+                <input id="imap-host" placeholder="imap.your-test-mail-provider.com" autocomplete="off">
+                <div class="two-col">
+                  <div><label for="imap-port">IMAP TLS port</label><input id="imap-port" type="number" min="1" max="65535" value="993"></div>
+                  <div><label for="imap-user">IMAP username</label><input id="imap-user" autocomplete="off" placeholder="qa-inbox@your-domain"></div>
+                </div>
+                <label for="imap-password">IMAP password or app password</label>
+                <input id="imap-password" type="password" autocomplete="off" placeholder="Used only to read the controlled test inbox">
+                <p class="hint">For generated aliases to receive mail, your controlled mailbox must support catch-all addresses or aliases for the chosen test domain.</p>
+                <p class="hint">The signup URL must share the target's exact origin. CAPTCHA, MFA, and other human challenges still pause for you.</p>
               </div>
               <div class="divider"></div>
               <label for="existing-email">Existing test account email <span class="optional">OPTIONAL</span></label>

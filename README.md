@@ -93,7 +93,7 @@ uv pip install playwright
 uv run python -m playwright install chromium
 ~~~
 
-In the dashboard, enable test-account creation and provide a site-specific CSS-selector recipe, plus an email domain/inbox you control. The signup URL must share the target origin. The generated account is intended for the target application only. Registration can fail or require site-specific handling; CAPTCHA, MFA, bot challenges, and verification are not bypassed. When signup success is unclear, the visible browser stays open and the workflow pauses for operator confirmation.
+In the dashboard, enable test-account creation and provide a site-specific CSS-selector recipe, plus an email domain/inbox you control. The signup URL must share the target origin. If your controlled mailbox accepts generated aliases, provide IMAPS host, username, and an app password to automate ordinary same-origin email verification. IMAP credentials are not sent to the LLM. CAPTCHA, MFA, bot challenges, and uncertain signup results still require operator action.
 
 **Safety and reliability notes:** only scan targets you own or have explicit written authorization to assess. Private/localhost targets require explicit opt-in. URL validation is a preflight guard, not a network egress firewall; enforce a network allowlist separately if you require a hard boundary. LLM API keys are passed to the Strix child process via environment, not command-line arguments. The generated test credentials are supplied to the configured model provider for authenticated testing; use a provider policy suitable for that data. Artifact scrubbing is best-effort, so review the run directory before sharing it. A completed scan is not proof that every vulnerability was found.
 

@@ -20,7 +20,7 @@ uv pip install playwright
 uv run python -m playwright install chromium
 ~~~
 
-Configure an exact signup-page URL and CSS selectors that match your staging app. Choose only a test-email domain and receiving inbox under your control. Browser-based registration may require manual verification; the workflow does not bypass CAPTCHA, MFA, rate controls, or other anti-abuse steps.
+Configure an exact signup-page URL and CSS selectors that match your staging app. Choose a test-email domain and receiving inbox you control. If your controlled mailbox supports generated aliases, optionally provide IMAPS host, username and an app password; the controller polls for verification messages addressed to the generated test email and follows only same-origin verification URLs. IMAP credentials are not sent to the LLM. CAPTCHA, MFA, and other human challenges still pause for manual action.
 
 ## Controls and limitations
 
