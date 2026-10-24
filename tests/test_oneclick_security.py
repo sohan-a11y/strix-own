@@ -27,4 +27,5 @@ def test_signup_must_use_same_origin() -> None:
 
 
 def test_same_origin_signup_normalizes_path() -> None:
-    assert require_same_origin("http://127.0.0.1:8080", "http://127.0.0.1:8080/register") == "http://127.0.0.1:8080/register"
+    actual = require_same_origin("http://127.0.0.1:8080", "http://127.0.0.1:8080/register")
+    assert actual == "http://127.0.0.1:8080/register"

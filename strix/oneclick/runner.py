@@ -4,7 +4,6 @@ import asyncio
 import json
 import os
 import re
-import shutil
 import time
 from collections import deque
 from dataclasses import dataclass, field

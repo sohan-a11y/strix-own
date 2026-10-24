@@ -9,7 +9,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import config
@@ -23,6 +23,9 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 def _require_local_request(request: Request) -> None:
+    request_host = (request.url.hostname or "").lower()
+    if request_host not in {"127.0.0.1", "localhost", "::1", "testserver"}:
+        raise HTTPException(403, "This controller only accepts localhost host headers.")
     client_host = request.client.host if request.client else ""
     try:
         import ipaddress
@@ -36,6 +39,16 @@ def _require_local_request(request: Request) -> None:
         host = (urlsplit(origin).hostname or "").lower()
         if host not in {"127.0.0.1", "localhost", "::1"}:
             raise HTTPException(403, "Cross-origin requests are not accepted by this local controller.")
+
+
+@app.middleware("http")
+async def guard_api_requests(request: Request, call_next: Any) -> Any:
+    if request.url.path.startswith("/api/"):
+        try:
+            _require_local_request(request)
+        except HTTPException as exc:
+            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    return await call_next(request)
 
 
 @app.get("/")

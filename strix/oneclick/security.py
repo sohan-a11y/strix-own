@@ -9,7 +9,9 @@ class TargetValidationError(ValueError):
     """Raised when a supplied target fails safe URL preflight."""
 
 
-def _host_addresses(host: str) -> set[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+def _host_addresses(
+    host: str,
+) -> set[ipaddress.IPv4Address | ipaddress.IPv6Address]:
     try:
         return {ipaddress.ip_address(host)}
     except ValueError:
