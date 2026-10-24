@@ -89,7 +89,7 @@ Open http://127.0.0.1:8765 in your browser. Docker must be running and the selec
 Install the browser extra and its Chromium runtime:
 
 ~~~bash
-uv sync --extra oneclick-browser
+uv pip install playwright
 uv run python -m playwright install chromium
 ~~~
 

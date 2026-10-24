@@ -16,7 +16,7 @@ uv run strix-oneclick
 Browse to http://127.0.0.1:8765. To provision a test account automatically, install the optional browser feature:
 
 ~~~bash
-uv sync --extra oneclick-browser
+uv pip install playwright
 uv run python -m playwright install chromium
 ~~~
 
