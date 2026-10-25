@@ -233,6 +233,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+"tests/test_oneclick_e2e.py" = ["N802", "ARG002"]
 "strix/oneclick/app.py" = ["N802", "ARG002", "PLR0912", "PLR0915"]
 "strix/oneclick/runner.py" = ["PLR0912", "PLR0915"]
 "strix/oneclick/cli.py" = ["T201"]

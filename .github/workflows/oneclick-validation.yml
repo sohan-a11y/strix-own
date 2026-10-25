@@ -1,0 +1,124 @@
+name: One-Click validation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "strix/oneclick/**"
+      - "tests/test_oneclick_*.py"
+      - "pyproject.toml"
+      - "README.md"
+      - "docs/one-click.mdx"
+      - ".github/workflows/oneclick-validation.yml"
+  push:
+    branches: [feature/one-click-assessment]
+    paths:
+      - "strix/oneclick/**"
+      - "tests/test_oneclick_*.py"
+      - "pyproject.toml"
+      - ".github/workflows/oneclick-validation.yml"
+  workflow_dispatch:
+    inputs:
+      run_live_scan:
+        description: "Run a metered scan against the isolated OWASP Juice Shop lab"
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oneclick-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  controller-e2e:
+    name: Controller unit and mock end-to-end tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-python-env
+      - name: Check Python syntax
+        run: uv run --frozen python -m compileall -q strix/oneclick tests/test_oneclick_security.py tests/test_oneclick_e2e.py
+      - name: Lint the new Python code
+        run: uv run --frozen ruff check strix/oneclick tests/test_oneclick_security.py tests/test_oneclick_e2e.py
+      - name: Check dashboard JavaScript syntax
+        run: node --check strix/oneclick/static/app.js
+      - name: Run target-scope and email verification tests
+        run: uv run --frozen pytest -q tests/test_oneclick_security.py
+      - name: Run dashboard API + mock CLI end-to-end test
+        run: uv run --frozen pytest -q tests/test_oneclick_e2e.py
+
+  live-lab-scan:
+    name: Optional real Strix scan of isolated Juice Shop lab
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_live_scan }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-python-env
+      - name: Require configured LLM credentials
+        env:
+          STRIX_LLM: ${{ secrets.STRIX_LLM }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+        run: |
+          if [[ -z "$STRIX_LLM" || -z "$LLM_API_KEY" ]]; then
+            echo "::error::Set repository Actions secrets STRIX_LLM and LLM_API_KEY before enabling the live lab scan."
+            exit 1
+          fi
+      - name: Start isolated vulnerable test application
+        run: |
+          docker run -d --rm --name oneclick-juice-shop -p 3000:3000 bkimminich/juice-shop
+          curl --retry 30 --retry-connrefused --retry-delay 2 -fsS http://127.0.0.1:3000/ -o /tmp/juice-shop.html
+      - name: Run a budget-limited real Strix assessment
+        env:
+          STRIX_LLM: ${{ secrets.STRIX_LLM }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+        run: |
+          set +e
+          uv run --frozen strix -n \
+            --target http://host.docker.internal:3000 \
+            --scan-mode quick \
+            --max-budget 5 \
+            --max-turns 60
+          result=$?
+          set -e
+          if [[ "$result" -ne 0 && "$result" -ne 2 ]]; then
+            echo "::error::Strix failed with exit code $result"
+            exit "$result"
+          fi
+          report="$(find strix_runs -type f -name penetration_test_report.md -print -quit)"
+          if [[ -z "$report" ]]; then
+            echo "::error::Strix did not create its final report"
+            exit 1
+          fi
+          echo "## Live scan result" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Scanner exit code: $result (2 means findings were reported)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Report: $report" >> "$GITHUB_STEP_SUMMARY"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          for path in Path("strix_runs").glob("*/run.json"):
+              try:
+                  data = json.loads(path.read_text(encoding="utf-8"))
+              except (OSError, json.JSONDecodeError):
+                  continue
+              print(f"{path}: status={data.get('status')} usage={data.get('llm_usage', {})}")
+          PY
+      - name: Upload reports for inspection
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: strix-live-lab-report
+          path: strix_runs/
+          if-no-files-found: warn
+          retention-days: 5
+      - name: Stop lab
+        if: always()
+        run: docker rm -f oneclick-juice-shop || true
