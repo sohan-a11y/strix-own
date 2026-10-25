@@ -8,6 +8,7 @@ import secrets
 import shutil
 import sys
 import threading
+from contextlib import suppress
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -129,7 +130,7 @@ class OneClickHandler(BaseHTTPRequestHandler):
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
             raise ValueError("Request body must be valid JSON.") from exc
         if not isinstance(body, dict):
-            raise ValueError("Request body must be a JSON object.")
+            raise TypeError("Request body must be a JSON object.")
         return body
 
     def _api_guard(self) -> bool:
@@ -141,7 +142,7 @@ class OneClickHandler(BaseHTTPRequestHandler):
         )
         return False
 
-    def do_GET(self) -> None:  # noqa: N802
+    def do_GET(self) -> None:
         parsed = urlsplit(self.path)
         path = parsed.path
         if path == "/":
@@ -230,7 +231,7 @@ class OneClickHandler(BaseHTTPRequestHandler):
             return
         self._send(200, file_path.read_bytes(), content_type)
 
-    def do_POST(self) -> None:  # noqa: N802
+    def do_POST(self) -> None:
         if not self._api_guard():
             return
         path = urlsplit(self.path).path
@@ -382,7 +383,7 @@ class OneClickHandler(BaseHTTPRequestHandler):
 
     def send_error(
         self, code: int, message: str | None = None, explain: str | None = None
-    ) -> None:  # noqa: N802, ARG002
+    ) -> None:
         self._json(code, {"detail": message or "Request failed."})
 
 
@@ -413,8 +414,6 @@ def serve(port: int = 8765) -> None:
         server.server_close()
         for job in list(JOBS.values()):
             future = asyncio.run_coroutine_threadsafe(stop_job(job), LOOP)
-            try:
+            with suppress(Exception):
                 future.result(timeout=10)
-            except Exception:  # noqa: BLE001
-                pass
         LOOP.call_soon_threadsafe(LOOP.stop)

@@ -7,24 +7,27 @@ import re
 import threading
 import time
 from collections import deque
+from contextlib import suppress
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from . import config
 from .accounts import IMAPInbox, TestAccount, provision_test_account
-from .models import SignupRecipe
 from .security import validate_target_url
+
+if TYPE_CHECKING:
+    from .models import SignupRecipe
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 RUN_RE = re.compile(r"strix_runs/([A-Za-z0-9_.-]+)")
-JOBS: dict[str, "ScanJob"] = {}
+JOBS: dict[str, ScanJob] = {}
 JOBS_LOCK = threading.RLock()
 
 
 def now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def redact(text: str, secrets_to_hide: list[str]) -> str:
@@ -37,10 +40,8 @@ def redact(text: str, secrets_to_hide: list[str]) -> str:
 def safe_write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
-    try:
+    with suppress(OSError):
         path.chmod(0o600)
-    except OSError:
-        pass
 
 
 @dataclass
@@ -190,7 +191,7 @@ async def _pause_for_operator(job: ScanJob, message: str) -> None:
     job.operator_continue.clear()
 
 
-async def start_job(job: ScanJob) -> None:  # noqa: PLR0912, PLR0915
+async def start_job(job: ScanJob) -> None:
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
     job_dir = config.DATA_DIR / job.id
     job_dir.mkdir(parents=True, exist_ok=True)
@@ -254,7 +255,7 @@ async def start_job(job: ScanJob) -> None:  # noqa: PLR0912, PLR0915
             job.started_at = now()
             touch(job, "running", "Strix is running; live output is shown below")
             try:
-                job.process = await asyncio.create_subprocess_exec(  # noqa: S603, S607
+                job.process = await asyncio.create_subprocess_exec(
                     *command,
                     cwd=str(config.WORK_DIR),
                     env=env,
@@ -275,7 +276,7 @@ async def start_job(job: ScanJob) -> None:  # noqa: PLR0912, PLR0915
                     job.process.terminate()
                     try:
                         await asyncio.wait_for(job.process.wait(), timeout=10)
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         job.process.kill()
                         await job.process.wait()
                     break
@@ -378,17 +379,13 @@ async def stop_job(job: ScanJob) -> None:
                 await asyncio.wait_for(asyncio.shield(job.task), timeout=12)
             except asyncio.TimeoutError:
                 job.task.cancel()
-                try:
+                with suppress(asyncio.CancelledError):
                     await job.task
-                except asyncio.CancelledError:
-                    pass
     elif job.task and not job.task.done():
         job.operator_continue.set()
         job.task.cancel()
-        try:
+        with suppress(asyncio.CancelledError):
             await job.task
-        except asyncio.CancelledError:
-            pass
     else:
         # The HTTP request can race the scheduled task's first event-loop tick.
         # Mark the job before yielding so _run_job can skip it deterministically.

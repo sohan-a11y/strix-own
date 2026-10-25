@@ -26,7 +26,9 @@ def _host_addresses(
             except ValueError:
                 continue
         if not addresses:
-            raise TargetValidationError(f"No IP addresses were resolved for {host!r}.")
+            raise TargetValidationError(
+                f"No IP addresses were resolved for {host!r}."
+            ) from None
         return addresses
 
 
@@ -62,10 +64,7 @@ def validate_target_url(raw: str, allow_private: bool = False) -> str:
             "The target resolves to a private, loopback, link-local, or non-public address. "
             "Use the private-target checkbox only for a system you control."
         )
-    if ":" in host:
-        netloc = f"[{host}]"
-    else:
-        netloc = host
+    netloc = f"[{host}]" if ":" in host else host
     if port is not None:
         netloc = f"{netloc}:{port}"
     return urlunsplit((scheme, netloc, parsed.path or "/", parsed.query, ""))

@@ -7,15 +7,19 @@ import re
 import secrets
 import string
 import time
+from collections.abc import Awaitable, Callable
+from contextlib import suppress
 from dataclasses import dataclass, field
 from email import policy
 from email.parser import BytesParser
 from email.utils import getaddresses
-from typing import Awaitable, Callable
+from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
-from .models import SignupRecipe
 from .security import TargetValidationError, require_same_origin
+
+if TYPE_CHECKING:
+    from .models import SignupRecipe
 
 
 @dataclass
@@ -140,10 +144,8 @@ def wait_for_verification_link(
             ) from exc
         finally:
             if client is not None:
-                try:
+                with suppress(imaplib.IMAP4.error, OSError):
                     client.logout()
-                except (imaplib.IMAP4.error, OSError):
-                    pass
         time.sleep(min(4, max(0, deadline - time.monotonic())))
     return None
 
