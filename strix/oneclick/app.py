@@ -84,7 +84,7 @@ class OneClickHandler(BaseHTTPRequestHandler):
     server_version = "StrixOneClick/0.1"
     sys_version = ""
 
-    def log_message(self, fmt: str, *args: Any) -> None:
+    def log_message(self, _fmt: str, *_args: Any) -> None:
         # Avoid logging target paths and request contents in the controller's terminal.
         return
 
@@ -382,7 +382,7 @@ class OneClickHandler(BaseHTTPRequestHandler):
             self._json(500, {"detail": "Controller error: " + type(exc).__name__})
 
     def send_error(
-        self, code: int, message: str | None = None, explain: str | None = None
+        self, code: int, message: str | None = None, _explain: str | None = None
     ) -> None:
         self._json(code, {"detail": message or "Request failed."})
 

@@ -7,7 +7,6 @@ import re
 import secrets
 import string
 import time
-from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from dataclasses import dataclass, field
 from email import policy
@@ -19,6 +18,8 @@ from urllib.parse import urlsplit
 from .security import TargetValidationError, require_same_origin
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from .models import SignupRecipe
 
 
