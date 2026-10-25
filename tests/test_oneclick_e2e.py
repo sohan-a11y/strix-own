@@ -19,7 +19,7 @@ from strix.oneclick.runner import JOBS, JOBS_LOCK
 
 
 class TargetHandler(BaseHTTPRequestHandler):
-    def do_GET(self) -> None
+    def do_GET(self) -> None:
         body = b"<!doctype html><title>Test application</title><h1>Test application</h1>"
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
