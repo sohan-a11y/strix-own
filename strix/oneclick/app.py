@@ -376,7 +376,7 @@ class OneClickHandler(BaseHTTPRequestHandler):
                     self._json(200, job.public())
                     return
             self._json(404, {"detail": "Route not found."})
-        except ValueError as exc:
+        except (ValueError, TypeError) as exc:
             self._json(400, {"detail": str(exc)})
         except Exception as exc:  # noqa: BLE001
             self._json(500, {"detail": "Controller error: " + type(exc).__name__})
